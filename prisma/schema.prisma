@@ -1,0 +1,47 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String     @id @default(cuid())
+  email     String     @unique
+  name      String
+  password  String?
+  qrCodes   QRCode[]
+  userApps  UserApp[]  // relation to apps via join table
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+}
+
+model App {
+  id        String     @id @default(cuid())
+  name      String
+  userApps  UserApp[]  // relation to users via join table
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+}
+
+model UserApp {
+  userId String
+  appId  String
+  role   String
+
+  user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  app    App  @relation(fields: [appId], references: [id])
+
+  @@id([userId, appId])
+}
+
+model QRCode {
+  id        String   @id @default(cuid())
+  code      String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
