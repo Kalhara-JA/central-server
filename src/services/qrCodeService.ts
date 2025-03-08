@@ -15,7 +15,7 @@ export const createQRCodeForUser = async (email: string, qrCode: string, passwor
                         password,
                         userApps: {
                             create: {
-                                role: 'temp-role',
+                                role: 'transitional-app-role',
                                 app: {
                                     connect: { id: process.env.QR_CODE_APP_ID },
                                 },
@@ -54,7 +54,6 @@ export const createQRCodeForUser = async (email: string, qrCode: string, passwor
             `Failed to create user: ${error.response?.status} ${error.response?.data}`
         );
     }
-    console.log('[createQRCodeForUser] Invalidate API response status:');
 
     return result;
 };

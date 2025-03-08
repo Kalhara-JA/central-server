@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { createKeyCloakUserWithQRCode } from '../controllers/keycloakController';
+import { createKeyCloakZammadUserWithQRCode } from '../controllers/keycloakController';
 
 const router = Router();
 
@@ -16,6 +16,6 @@ const router = Router();
  * @desc Create a new user in Keycloak with the provided email,password and qrcode.
  * @access Public (or restrict as needed)
  */
-router.post('/users/qrcode', createKeyCloakUserWithQRCode);
+router.post('/users/qrcode', createKeyCloakZammadUserWithQRCode);
 
 export default router;

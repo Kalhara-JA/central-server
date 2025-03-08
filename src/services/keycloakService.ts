@@ -1,5 +1,11 @@
 import axios from 'axios';
 import { createQRCodeForUser } from './qrCodeService';
+import { createUserInZammadService, findUserByEmailFromZammad } from './zammadService';
+
+const baseUrl = process.env.KEYCLOAK_BASE_URL;
+const realm = process.env.KEYCLOAK_REALM;
+const clientId = process.env.KEYCLOAK_CLIENT_ID;
+const clientSecret = process.env.KEYCLOAK_CLIENT_SECRET;
 
 /**
  * Helper function to obtain an admin access token from Keycloak.
@@ -7,8 +13,6 @@ import { createQRCodeForUser } from './qrCodeService';
 async function getAdminAccessToken(): Promise<string> {
   console.log('[getAdminAccessToken] Starting to fetch admin access token');
   console.log('[getAdminAccessToken] KEYCLOAK_BASE_URL:', process.env.KEYCLOAK_BASE_URL);
-  const baseUrl = process.env.KEYCLOAK_BASE_URL;
-  const realm = process.env.KEYCLOAK_REALM;
   const tokenUrl = `${baseUrl}/realms/${realm}/protocol/openid-connect/token`;
 
   // Create URLSearchParams instance with required fields
@@ -35,6 +39,52 @@ async function getAdminAccessToken(): Promise<string> {
     );
   }
 }
+
+export const validateToken = async (token: string): Promise<{ sub: string; email: string }> => {
+  try {
+    console.log("token: ", token)
+    // Call the introspection endpoint
+    const response = await axios.post(
+      `${baseUrl}/realms/${realm}/protocol/openid-connect/token/introspect`,
+      new URLSearchParams({
+        token,
+        client_id: clientId as string,
+        client_secret: clientSecret as string,
+      }),
+      {
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+      }
+    );
+
+    const data = response.data;
+
+    // Check if the token is active
+    if (!data.active) {
+      throw new Error('Unauthorized: Token is inactive or invalid');
+    }
+
+    // Extract the required claims
+    const { sub, email } = data;
+
+    if (!sub || !email) {
+      throw new Error('Unauthorized: Token is missing required claims');
+    }
+
+    return {
+      sub,
+      email,
+    };
+  } catch (error) {
+    if (error instanceof Error) {
+      console.error('Token introspection error:', error.message);
+    } else {
+      console.error('Token introspection error:', error);
+    }
+    throw new Error('Unauthorized: Invalid token');
+  }
+};
 
 /**
  * Helper function to check if a user already exists in Keycloak by email.
@@ -69,10 +119,12 @@ async function getUserFromKeycloak(email: string, token: string): Promise<{ id: 
  * Creates a new user in Keycloak using the admin access token.
  * If the user already exists, it skips creation.
  */
-export const createUserInKeycloakWithQRCode = async (
+export const createUserInKeycloakAndZammadWithQRCode = async (
   email: string,
   password: string,
-  qrCode: string
+  qrCode: string,
+  firstName: string,
+  lastName: string
 ) => {
   console.log('[createUserInKeycloakWithQRCode] Starting process for email:', email);
   const baseUrl = process.env.KEYCLOAK_BASE_URL;
@@ -82,6 +134,8 @@ export const createUserInKeycloakWithQRCode = async (
   const createUserUrl = `${baseUrl}/admin/realms/${realm}/users`;
   const payload = {
     email,
+    firstName,
+    lastName,
     username: email,
     enabled: true,
     credentials: [
@@ -154,6 +208,29 @@ export const createUserInKeycloakWithQRCode = async (
     }
     throw new Error(
       `Failed to create user with QR code: ${error.response?.status} ${error.response?.data}`
+    );
+  }
+
+  //check and create user in zammad
+  try {
+
+    const isUser = await findUserByEmailFromZammad(email);
+    if (isUser) {
+      console.log('[createUserInKeycloakWithQRCode] User already exists in Zammad:', email);
+      return isUser;
+    }
+
+    const user = await createUserInZammadService(email, password, firstName, lastName);
+    console.log('[createUserInKeycloakWithQRCode] User created in Zammad:', user);
+  } catch (error: any) {
+    console.error(
+      '[createUserInKeycloakWithQRCode] Error creating user in Zammad for email:',
+      email,
+      error.response?.status,
+      error.response?.data
+    );
+    throw new Error(
+      `Failed to create user in Zammad: ${error.response?.status} ${error.response?.data}`
     );
   }
 
